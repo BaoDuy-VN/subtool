@@ -249,7 +249,7 @@
         <div class="container">
             <span class="badge">Free Tool cho Fansub</span>
             <h1>SubTool</h1>
-            <p>Tách phụ đề cứng (hardsub) từ video và kiểm tra bản quyền nhạc/video trước khi upload</p>
+            <p>Tách phụ đề từ video bằng AI (giống CapCut) và kiểm tra bản quyền nhạc/video trước khi upload</p>
         </div>
     </div>
 
@@ -293,7 +293,7 @@
                     <div class="progress-bar-wrapper">
                         <div class="progress-bar" id="progressbar-extract"></div>
                     </div>
-                    <p class="progress-text" id="progresstext-extract">Đang cắt frames và OCR phụ đề...</p>
+                    <p class="progress-text" id="progresstext-extract">Đang phân tích audio và tạo phụ đề...</p>
                     <a href="#" class="btn-download" id="download-extract" download style="display:none; margin-top:20px;">
                         📥 Tải file SRT
                     </a>
@@ -337,7 +337,7 @@
             <div class="feature">
                 <div class="icon">⚡</div>
                 <h4>Nhanh & Chính xác</h4>
-                <p>OCR bằng AI nhận diện tiếng Trung, Việt, Anh</p>
+                <p>AI Whisper nhận diện giọng nói: Trung, Việt, Anh</p>
             </div>
             <div class="feature">
                 <div class="icon">🔒</div>
@@ -438,7 +438,7 @@
                 progressBar.style.width = '50%';
                 statusText.textContent = type === 'extract' ? 'Đang xử lý video...' : 'Đang phân tích...';
                 progressText.textContent = type === 'extract'
-                    ? 'Đang cắt frames và OCR phụ đề (server miễn phí có thể chậm, vui lòng chờ 3-5 phút)...'
+                    ? 'Đang phân tích audio và tạo phụ đề (có thể mất 3-10 phút tùy độ dài video)...'
                     : 'Đang tạo fingerprint và kiểm tra bản quyền...';
 
                 // Poll for status
@@ -490,7 +490,7 @@
                     // Cập nhật text theo tiến độ
                     if (pollCount % 5 === 0) {
                         const msgs = type === 'extract' 
-                            ? ['Đang cắt frames...', 'Đang OCR frame hiện tại...', 'Đang xử lý text...', 'Đang tạo file SRT...']
+                            ? ['Đang trích xuất audio...', 'Đang nhận diện giọng nói...', 'Đang tạo phụ đề...', 'Đang hoàn thiện...']
                             : ['Đang trích xuất audio...', 'Đang tạo fingerprint...', 'Đang so sánh database...', 'Đang hoàn tất...'];
                         progressText.textContent = msgs[Math.min(Math.floor(pollCount / 5), msgs.length - 1)];
                     }
