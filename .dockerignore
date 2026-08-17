@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+static/uploads/*
+!static/uploads/.gitkeep
+data/fingerprint_db.json
+*.mp4
+test_*.mp4
+.DS_Store

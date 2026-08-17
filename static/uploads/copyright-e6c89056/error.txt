@@ -1,0 +1,1 @@
+[Errno 2] No such file or directory: '/Users/baoduy/Documents/Qoder/2026-08-16/chat-1/sub-tool/static/uploads/copyright-e6c89056/test_video_audio.mp3'
