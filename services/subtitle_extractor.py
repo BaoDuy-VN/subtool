@@ -146,21 +146,22 @@ class SubtitleExtractor:
             except Exception as e:
                 text = ""
             
-            timestamp = i  # Mỗi frame cách nhau 1 giây
+            timestamp = i  # Mỗi frame cách nhau 2 giây
             
-            if text.strip():
+            # Chỉ giữ text hợp lệ (loại bỏ nhiễu)
+            if text.strip() and self._is_valid_subtitle(text):
                 results.append((text.strip(), timestamp))
         
         return results
     
     def _crop_subtitle_area(self, frame_path: Path) -> Path:
-        """Cắt phần dưới của frame (nơi có phụ đề)"""
+        """Cắt phần dưới của frame (nơi có phụ đề) - chỉ lấy 15% cuối"""
         cropped_path = frame_path.parent / f"crop_{frame_path.name}"
         
-        # Dùng FFmpeg crop 25% chiều cao từ dưới lên
+        # Dùng FFmpeg crop 15% chiều cao từ dưới lên (ít nhiễu hơn 25%)
         cmd = [
             "ffmpeg", "-i", str(frame_path),
-            "-vf", "crop=iw:ih*0.25:0:ih*0.75",
+            "-vf", "crop=iw:ih*0.15:0:ih*0.85",
             "-y", str(cropped_path)
         ]
         subprocess.run(cmd, capture_output=True, check=False)
@@ -221,6 +222,24 @@ class SubtitleExtractor:
         matches = sum(1 for a, b in zip(text1, text2) if a == b)
         ratio = matches / max(len1, len2)
         return ratio > threshold
+    
+    def _is_valid_subtitle(self, text: str) -> bool:
+        """Kiểm tra text có phải phụ đề hợp lệ không"""
+        if not text or len(text.strip()) < 2:
+            return False
+        
+        # Loại bỏ text chỉ chứa ký tự đặc biệt
+        import re
+        # Chỉ giữ text có ít nhất 2 ký tự chữ (Chinese, Vietnamese, English)
+        alphanumeric = re.findall(r'[\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]', text)
+        if len(alphanumeric) < 2:
+            return False
+        
+        # Loại bỏ text quá ngắn hoặc toàn dấu gạch ngang
+        if text.count('-') > len(text) * 0.5:
+            return False
+        
+        return True
     
     def _format_time(self, seconds: float) -> str:
         """Convert giây sang format SRT time: HH:MM:SS,mmm"""
