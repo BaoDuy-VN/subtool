@@ -335,6 +335,10 @@
                 <span class="tab-icon">✂️</span>
                 Chỉnh Sửa Video
             </div>
+            <div class="tab" data-tab="translate">
+                <span class="tab-icon">🌐</span>
+                Dịch + Gắn Sub
+            </div>
         </div>
 
         <div class="content">
@@ -477,6 +481,61 @@
                     <a href="#" class="btn-download" id="download-editor" download style="display:none; margin-top:20px;">
                         📥 Tải video đã xử lý
                     </a>
+                </div>
+            </div>
+
+            <!-- Panel: Dịch + Gắn Sub -->
+            <div class="panel" id="panel-translate">
+                <div class="upload-area" id="dropzone-translate">
+                    <div class="icon">🎬</div>
+                    <h3>Kéo thả video vào đây</h3>
+                    <p>Hoặc click để chọn file • MP4, MKV, AVI, WebM • Tối đa 500MB</p>
+                    <input type="file" id="file-translate" accept="video/*">
+                </div>
+
+                <div class="file-info" id="file-info-translate" style="display:none">
+                    <span class="file-icon">🎥</span>
+                    <div>
+                        <div class="file-name" id="filename-translate"></div>
+                        <div class="file-size" id="filesize-translate"></div>
+                    </div>
+                </div>
+
+                <!-- Optional SRT upload -->
+                <div id="srt-upload-section" style="display:none; margin-top:20px; padding:20px; background:var(--gray-50); border-radius:12px;">
+                    <h4 style="margin-bottom:12px;">📄 (Tùy chọn) Upload file SRT có sẵn</h4>
+                    <p style="font-size:13px; color:var(--gray-500); margin-bottom:12px;">Nếu không upload SRT, hệ thống sẽ tự động tách phụ đề bằng AI</p>
+                    <input type="file" id="srt-file" accept=".srt" class="editor-input">
+                </div>
+
+                <!-- Font size setting -->
+                <div id="translate-settings" style="display:none; margin-top:20px; padding:20px; background:var(--gray-50); border-radius:12px;">
+                    <div class="input-group">
+                        <label>Cỡ chữ phụ đề:</label>
+                        <input type="number" id="font-size" class="editor-input" value="24" min="12" max="48">
+                    </div>
+                    <button id="btn-translate" class="btn-download" style="margin-top:12px;">
+                        🌐 Dịch + Gắn Sub vào Video
+                    </button>
+                </div>
+
+                <div class="progress-section" id="progress-translate">
+                    <div class="progress-status">
+                        <div class="spinner"></div>
+                        <span id="status-translate">Đang xử lý...</span>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressbar-translate"></div>
+                    </div>
+                    <p class="progress-text" id="progresstext-translate">Đang xử lý video...</p>
+                    <div style="display:flex; gap:12px; margin-top:20px;">
+                        <a href="#" class="btn-download" id="download-video-translated" download style="display:none;">
+                            📥 Tải video đã gắn sub
+                        </a>
+                        <a href="#" class="btn-download" id="download-srt-translated" download style="display:none; background:var(--success);">
+                            📄 Tải SRT đã dịch
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -998,6 +1057,139 @@
             });
             document.body.appendChild(installBtn);
         });
+
+        // ===== TRANSLATE PANEL =====
+        let translateFile = null;
+        let translateSrt = null;
+
+        const translateDropzone = document.getElementById('dropzone-translate');
+        const translateInput = document.getElementById('file-translate');
+        const srtInput = document.getElementById('srt-file');
+
+        if (translateInput) {
+            translateInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    translateFile = e.target.files[0];
+                    showTranslateFileInfo(translateFile);
+                }
+            });
+        }
+
+        if (srtInput) {
+            srtInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    translateSrt = e.target.files[0];
+                    console.log('SRT file selected:', translateSrt.name);
+                }
+            });
+        }
+
+        if (translateDropzone) {
+            translateDropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                translateDropzone.classList.add('dragover');
+            });
+            translateDropzone.addEventListener('dragleave', () => {
+                translateDropzone.classList.remove('dragover');
+            });
+            translateDropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                translateDropzone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    translateFile = e.dataTransfer.files[0];
+                    showTranslateFileInfo(translateFile);
+                }
+            });
+        }
+
+        function showTranslateFileInfo(file) {
+            document.getElementById('file-info-translate').style.display = 'flex';
+            document.getElementById('filename-translate').textContent = file.name;
+            document.getElementById('filesize-translate').textContent = formatSize(file.size);
+            document.getElementById('srt-upload-section').style.display = 'block';
+            document.getElementById('translate-settings').style.display = 'block';
+        }
+
+        document.getElementById('btn-translate')?.addEventListener('click', async function() {
+            if (!translateFile) {
+                alert('Vui lòng chọn video!');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', translateFile);
+            if (translateSrt) {
+                formData.append('srt_file', translateSrt);
+            }
+            formData.append('font_size', document.getElementById('font-size')?.value || 24);
+
+            try {
+                document.getElementById('progress-translate').classList.add('active');
+                document.getElementById('status-translate').textContent = 'Đang upload...';
+
+                const response = await fetch('/api/translate-burn', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.job_id) {
+                    pollTranslateStatus(data.job_id);
+                }
+            } catch (error) {
+                alert('Lỗi: ' + error.message);
+            }
+        });
+
+        function pollTranslateStatus(jobId) {
+            let pollCount = 0;
+            const maxPolls = 600; // 20 minutes max
+
+            const poll = setInterval(async () => {
+                pollCount++;
+                if (pollCount > maxPolls) {
+                    clearInterval(poll);
+                    document.getElementById('status-translate').textContent = 'Timeout!';
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/translate-burn/${jobId}/status`);
+                    const data = await response.json();
+
+                    const progressBar = document.getElementById('progressbar-translate');
+                    const statusText = document.getElementById('status-translate');
+                    const progressText = document.getElementById('progresstext-translate');
+
+                    // Fake progress based on poll count
+                    let progress = Math.min(pollCount * 1.5, 90);
+                    progressBar.style.width = progress + '%';
+
+                    // Show progress message from server
+                    if (data.progress) {
+                        progressText.textContent = data.progress;
+                    }
+
+                    if (data.status === 'completed') {
+                        clearInterval(poll);
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'var(--success)';
+                        statusText.textContent = '✅ Hoàn thành!';
+                        progressText.textContent = 'Video đã được dịch và gắn phụ đề.';
+
+                        document.getElementById('download-video-translated').href = `/api/translate-burn/${jobId}/download`;
+                        document.getElementById('download-video-translated').style.display = 'inline-flex';
+                        document.getElementById('download-srt-translated').href = `/api/translate-burn/${jobId}/srt`;
+                        document.getElementById('download-srt-translated').style.display = 'inline-flex';
+                    } else if (data.status === 'error') {
+                        clearInterval(poll);
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'var(--danger)';
+                        statusText.textContent = '❌ Lỗi!';
+                        progressText.textContent = data.message || 'Có lỗi xảy ra';
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                }
+            }, 2000);
+        }
     </script>
 </body>
 </html>
