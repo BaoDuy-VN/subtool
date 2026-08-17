@@ -55,10 +55,14 @@ class SubtitleExtractor:
         # Step 1: Lấy thông tin video
         duration = await self._get_video_duration(video_path)
         
-        # Step 2: Cắt frames (mỗi 1 giây)
+        # Giới hạn 2 phút cho free tier
+        if duration > 120:
+            raise ValueError(f"Video quá dài ({duration:.0f}s). Free tier chỉ hỗ trợ tối đa 2 phút.")
+        
+        # Step 2: Cắt frames (mỗi 2 giây - giảm số frame để nhanh hơn)
         self.frame_dir = job_dir / "frames"
         self.frame_dir.mkdir(exist_ok=True)
-        await self._extract_frames(video_path, interval=1.0)
+        await self._extract_frames(video_path, interval=2.0)
         
         # Step 3: OCR trên từng frame
         frame_texts = await self._ocr_frames()
@@ -124,13 +128,15 @@ class SubtitleExtractor:
             # Crop phần dưới (25% chiều cao frame - nơi có sub)
             cropped = self._crop_subtitle_area(frame_path)
             
-            # OCR bằng Tesseract
+            # OCR bằng Tesseract - chỉ dùng English cho nhanh
             try:
                 img = Image.open(str(cropped))
                 # Chuyển sang grayscale để tăng độ chính xác
                 img = img.convert('L')
-                # OCR với nhiều ngôn ngữ
-                text = pytesseract.image_to_string(img, lang='chi_sim+vie+eng')
+                # Resize nhỏ hơn để OCR nhanh hơn
+                img = img.resize((img.width // 2, img.height // 2))
+                # OCR chỉ English (nhanh hơn nhiều so với chi_sim+vie)
+                text = pytesseract.image_to_string(img, lang='eng')
             except Exception as e:
                 text = ""
             
