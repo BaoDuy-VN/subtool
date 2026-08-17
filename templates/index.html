@@ -501,22 +501,15 @@
                         progressBar.style.background = 'var(--success)';
                         statusText.textContent = 'Hoàn thành!';
 
-                        // Ẩn progress section sau 1 giây
-                        setTimeout(() => {
-                            document.getElementById(`progress-${type}`).style.display = 'none';
-                        }, 1000);
+                        // Ẩn spinner
+                        const spinner = document.getElementById(`spinner-${type}`);
+                        if (spinner) spinner.style.display = 'none';
 
                         if (type === 'extract') {
                             showExtractResult(data, jobId);
                         } else {
                             showCopyrightResult(data);
                         }
-                        
-                        // Scroll đến kết quả
-                        setTimeout(() => {
-                            const resultEl = document.getElementById(`result-${type}`);
-                            if (resultEl) resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 500);
                     } else if (data.status === 'error') {
                         clearInterval(poll);
                         progressBar.style.width = '100%';
