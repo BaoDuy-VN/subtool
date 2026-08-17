@@ -472,13 +472,39 @@
                 : `/api/check-copyright/${jobId}/status`;
 
             let progress = 50;
+            let pollCount = 0;
+            const maxPolls = 150; // 5 phút (150 x 2 giây)
+            
             const poll = setInterval(async () => {
+                pollCount++;
+                
+                // Timeout sau 5 phút
+                if (pollCount > maxPolls) {
+                    clearInterval(poll);
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = 'var(--warning, #f59e0b)';
+                    statusText.textContent = 'Xử lý quá lâu';
+                    progressText.textContent = 'Video quá dài hoặc server đang bận. Thử lại với video ngắn hơn (< 5 phút).';
+                    return;
+                }
+                
                 try {
-                    const resp = await fetch(statusEndpoint);
+                    const resp = await fetch(statusEndpoint, { 
+                        signal: AbortSignal.timeout(10000) // 10s timeout
+                    });
                     const data = await resp.json();
 
-                    progress = Math.min(progress + 5, 90);
+                    // Tăng progress chậm hơn để không đứng im
+                    progress = Math.min(progress + 2, 92);
                     progressBar.style.width = progress + '%';
+                    
+                    // Cập nhật text theo tiến độ
+                    if (pollCount % 5 === 0) {
+                        const msgs = type === 'extract' 
+                            ? ['Đang cắt frames...', 'Đang OCR frame hiện tại...', 'Đang xử lý text...', 'Đang tạo file SRT...']
+                            : ['Đang trích xuất audio...', 'Đang tạo fingerprint...', 'Đang so sánh database...', 'Đang hoàn tất...'];
+                        progressText.textContent = msgs[Math.min(Math.floor(pollCount / 5), msgs.length - 1)];
+                    }
 
                     if (data.status === 'completed') {
                         clearInterval(poll);
@@ -499,7 +525,10 @@
                         progressText.textContent = data.message || 'Có lỗi xảy ra';
                     }
                 } catch (e) {
-                    // Continue polling
+                    // Network error - continue polling nhưng hiển thị warning
+                    if (pollCount % 10 === 0) {
+                        progressText.textContent = 'Đang kết nối lại... (' + e.message + ')';
+                    }
                 }
             }, 2000);
         }
