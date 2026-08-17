@@ -55,9 +55,9 @@ class SubtitleExtractor:
         # Step 1: Lấy thông tin video
         duration = await self._get_video_duration(video_path)
         
-        # Giới hạn 2 phút cho free tier
-        if duration > 120:
-            raise ValueError(f"Video quá dài ({duration:.0f}s). Free tier chỉ hỗ trợ tối đa 2 phút.")
+        # Cảnh báo video dài (không chặn, để server tự xử lý)
+        if duration > 300:
+            print(f"Warning: Video dài {duration:.0f}s, có thể mất nhiều thời gian xử lý")
         
         # Step 2: Cắt frames (mỗi 2 giây - giảm số frame để nhanh hơn)
         self.frame_dir = job_dir / "frames"
