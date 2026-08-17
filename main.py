@@ -204,7 +204,8 @@ async def process_copyright_check(job_id: str, file_path: Path):
 async def translate_and_burn(
     file: UploadFile = File(...),
     srt_file: UploadFile = File(None),
-    font_size: int = 24,
+    font_size: int = 48,
+    remove_hardsub: bool = True,
     background_tasks: BackgroundTasks = None
 ):
     """
@@ -229,7 +230,7 @@ async def translate_and_burn(
             shutil.copyfileobj(srt_file.file, f)
     
     if background_tasks:
-        background_tasks.add_task(process_translate_burn, job_id, video_path, srt_path, font_size)
+        background_tasks.add_task(process_translate_burn, job_id, video_path, srt_path, font_size, remove_hardsub)
     
     return {"job_id": job_id, "status": "processing", "message": "Đang xử lý..."}
 
@@ -508,7 +509,7 @@ async def process_watermark(job_id: str, video_path: Path, text: str, position: 
         (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
 
 
-async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, font_size: int):
+async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, font_size: int, remove_hardsub: bool = True):
     """Xử lý dịch phụ đề và burn vào video"""
     from services.translation_service import TranslationService
     from services.video_editor import VideoEditor
@@ -539,7 +540,8 @@ async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, 
             srt_path=translated_srt,
             output_path=output_path,
             font_size=font_size,
-            position="bottom"
+            position="bottom",
+            remove_hardsub=remove_hardsub
         )
         
         # Done - đánh dấu hoàn thành để status endpoint báo completed

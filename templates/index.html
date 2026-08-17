@@ -512,7 +512,11 @@
                 <div id="translate-settings" style="display:none; margin-top:20px; padding:20px; background:var(--gray-50); border-radius:12px;">
                     <div class="input-group">
                         <label>Cỡ chữ phụ đề:</label>
-                        <input type="number" id="font-size" class="editor-input" value="24" min="12" max="48">
+                        <input type="number" id="font-size" class="editor-input" value="48" min="20" max="96">
+                    </div>
+                    <div class="input-group" style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="remove-hardsub" checked style="width:18px; height:18px;">
+                        <label for="remove-hardsub" style="margin:0;">🌫️ Làm mờ phụ đề gốc trong video (che sub cứng Trung)</label>
                     </div>
                     <button id="btn-translate" class="btn-download" style="margin-top:12px;">
                         🌐 Dịch + Gắn Sub vào Video
@@ -1121,13 +1125,17 @@
             if (translateSrt) {
                 formData.append('srt_file', translateSrt);
             }
-            formData.append('font_size', document.getElementById('font-size')?.value || 24);
+
+            const params = new URLSearchParams({
+                font_size: document.getElementById('font-size')?.value || 48,
+                remove_hardsub: document.getElementById('remove-hardsub')?.checked ? 'true' : 'false'
+            });
 
             try {
                 document.getElementById('progress-translate').classList.add('active');
                 document.getElementById('status-translate').textContent = 'Đang upload...';
 
-                const response = await fetch('/api/translate-burn', { method: 'POST', body: formData });
+                const response = await fetch(`/api/translate-burn?${params}`, { method: 'POST', body: formData });
                 const data = await response.json();
 
                 if (data.job_id) {

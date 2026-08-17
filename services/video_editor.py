@@ -73,8 +73,9 @@ class VideoEditor:
             return 0
     
     async def burn_subtitle(self, video_path: Path, srt_path: Path, output_path: Path, 
-                           font_size: int = 24, font_color: str = "white",
-                           position: str = "bottom", outline: bool = True) -> Path:
+                           font_size: int = 48, font_color: str = "white",
+                           position: str = "bottom", outline: bool = True,
+                           remove_hardsub: bool = False) -> Path:
         """
         Gắn phụ đề vào video (burn subtitle)
         
@@ -82,13 +83,19 @@ class VideoEditor:
             video_path: Video gốc
             srt_path: File SRT phụ đề
             output_path: Đường dẫn output
-            font_size: Cỡ chữ
+            font_size: Cỡ chữ tính theo pixel ở độ phân giải gốc
             font_color: Màu chữ (white, yellow, etc.)
             position: Vị trí (top, middle, bottom)
             outline: Có viền chữ không
+            remove_hardsub: Làm mờ vùng sub cứng gốc ở đáy video
         """
+        # Scale font_size (pixel) sang đơn vị ASS (PlayResY=288) theo chiều cao video
+        info = await self.get_video_info(video_path)
+        height = info.get("height") or 1080
+        ass_font = max(int(font_size * 288 / height), 6)
+        
         # Force style cho subtitle
-        force_style = f"FontSize={font_size},PrimaryColour=&H00FFFFFF"
+        force_style = f"FontSize={ass_font},PrimaryColour=&H00FFFFFF"
         if outline:
             force_style += ",Outline=2,OutlineColour=&H00000000"
         
@@ -98,18 +105,36 @@ class VideoEditor:
         elif position == "middle":
             force_style += ",Alignment=5"  # Middle center
         else:
-            force_style += ",Alignment=2"  # Bottom center
+            force_style += ",Alignment=2,MarginV=20"  # Bottom center
         
         # Escape đường dẫn cho filter subtitles (tránh lỗi parse của ffmpeg)
         srt_escaped = str(srt_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
         
-        cmd = [
-            "ffmpeg", "-i", str(video_path),
-            "-vf", f"subtitles='{srt_escaped}':force_style='{force_style}'",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",  # Encode nhanh, chất lượng tốt
-            "-c:a", "copy",
-            "-y", str(output_path)
-        ]
+        if remove_hardsub:
+            # Làm mờ 20% dưới cùng của khung hình (nơi sub cứng gốc nằm)
+            # rồi mới gắn sub mới lên trên -> che được sub gốc
+            filter_complex = (
+                "[0:v]split=2[base][subsrc];"
+                "[subsrc]crop=iw:ih*0.20:0:ih*0.80,boxblur=20:2[blurred];"
+                "[base][blurred]overlay=0:H*0.80[bg];"
+                f"[bg]subtitles='{srt_escaped}':force_style='{force_style}'[out]"
+            )
+            cmd = [
+                "ffmpeg", "-i", str(video_path),
+                "-filter_complex", filter_complex,
+                "-map", "[out]", "-map", "0:a?",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-c:a", "copy",
+                "-y", str(output_path)
+            ]
+        else:
+            cmd = [
+                "ffmpeg", "-i", str(video_path),
+                "-vf", f"subtitles='{srt_escaped}':force_style='{force_style}'",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",  # Encode nhanh, chất lượng tốt
+                "-c:a", "copy",
+                "-y", str(output_path)
+            ]
         
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
