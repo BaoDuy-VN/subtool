@@ -411,16 +411,14 @@
 
         async function uploadFile(type, file) {
             const progressSection = document.getElementById(`progress-${type}`);
-            const resultSection = document.getElementById(`result-${type}`);
             const progressBar = document.getElementById(`progressbar-${type}`);
             const statusText = document.getElementById(`status-${type}`);
             const progressText = document.getElementById(`progresstext-${type}`);
 
             // Reset
-            progressSection.classList.add('active');
-            resultSection.classList.remove('active');
-            resultSection.innerHTML = '';
+            if (progressSection) progressSection.classList.add('active');
             progressBar.style.width = '0%';
+            progressBar.style.background = 'var(--primary)';
 
             const endpoint = type === 'extract' ? '/api/extract-sub' : '/api/check-copyright';
             const formData = new FormData();
