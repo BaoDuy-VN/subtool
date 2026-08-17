@@ -1,0 +1,13 @@
+{
+  "is_copyrighted": false,
+  "confidence": 0,
+  "matches": [],
+  "warnings": [
+    "Không tìm thấy kết quả khớp trong database. Tuy nhiên, điều này KHÔNG đảm bảo video/nhạc không có bản quyền."
+  ],
+  "details": {
+    "audio_duration": 182.323084,
+    "local_db_matches": 0,
+    "youtube_matches": 0
+  }
+}

@@ -32,7 +32,8 @@ class CopyrightChecker:
     """
     
     def __init__(self):
-        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY", "")
+        # YouTube API key - lấy từ env hoặc dùng default (local dev only)
+        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY", "AIzaSyCSO0_k9pZLzMrGLEvAlc3zOUEBuHqi-Rs")
         self.fingerprint_db_path = Path(__file__).parent.parent / "data" / "fingerprint_db.json"
     
     async def check(self, file_path: Path, job_id: str) -> Dict:

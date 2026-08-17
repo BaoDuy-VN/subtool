@@ -198,6 +198,233 @@ async def process_copyright_check(job_id: str, file_path: Path):
         raise
 
 
+# ===== VIDEO EDITOR API =====
+
+@app.post("/api/edit/trim")
+async def trim_video(
+    file: UploadFile = File(...),
+    start_time: float = 0,
+    end_time: float = None,
+    background_tasks: BackgroundTasks = None
+):
+    """Cắt video theo thời gian"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_trim, job_id, video_path, start_time, end_time)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.post("/api/edit/speed")
+async def change_speed(
+    file: UploadFile = File(...),
+    speed: float = 1.0,
+    background_tasks: BackgroundTasks = None
+):
+    """Điều chỉnh tốc độ video"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_speed, job_id, video_path, speed)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.post("/api/edit/compress")
+async def compress_video(
+    file: UploadFile = File(...),
+    crf: int = 28,
+    background_tasks: BackgroundTasks = None
+):
+    """Nén video giảm dung lượng"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_compress, job_id, video_path, crf)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.post("/api/edit/extract-audio")
+async def extract_audio_api(
+    file: UploadFile = File(...),
+    format: str = "mp3",
+    background_tasks: BackgroundTasks = None
+):
+    """Tách audio từ video"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_extract_audio, job_id, video_path, format)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.post("/api/edit/resize")
+async def resize_video_api(
+    file: UploadFile = File(...),
+    width: int = None,
+    height: int = None,
+    background_tasks: BackgroundTasks = None
+):
+    """Resize video"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_resize, job_id, video_path, width, height)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.post("/api/edit/watermark")
+async def add_watermark_api(
+    file: UploadFile = File(...),
+    text: str = "SubTool",
+    position: str = "bottom_right",
+    background_tasks: BackgroundTasks = None
+):
+    """Thêm watermark vào video"""
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_watermark, job_id, video_path, text, position)
+    
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.get("/api/edit/{job_id}/status")
+async def check_edit_status(job_id: str):
+    """Kiểm tra trạng thái chỉnh sửa"""
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job không tồn tại")
+    
+    # Check output files
+    output_files = list(job_dir.glob("output_*"))
+    if output_files:
+        return {
+            "status": "completed",
+            "job_id": job_id,
+            "output_file": f"/static/uploads/edit-{job_id}/{output_files[0].name}",
+            "filename": output_files[0].name
+        }
+    
+    error_file = job_dir / "error.txt"
+    if error_file.exists():
+        return {"status": "error", "message": error_file.read_text()}
+    
+    return {"status": "processing", "job_id": job_id}
+
+
+@app.get("/api/edit/{job_id}/download")
+async def download_edited(job_id: str):
+    """Tải file đã chỉnh sửa"""
+    job_dir = UPLOAD_DIR / f"edit-{job_id}"
+    output_files = list(job_dir.glob("output_*"))
+    if not output_files:
+        raise HTTPException(status_code=404, detail="Chưa có file output")
+    return FileResponse(output_files[0], filename=output_files[0].name)
+
+
+# ===== BACKGROUND PROCESSING FOR EDITOR =====
+
+async def process_trim(job_id: str, video_path: Path, start_time: float, end_time: float):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_trimmed{video_path.suffix}"
+        await editor.trim_video(video_path, output_path, start_time, end_time)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_speed(job_id: str, video_path: Path, speed: float):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_speed{video_path.suffix}"
+        await editor.change_speed(video_path, output_path, speed)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_compress(job_id: str, video_path: Path, crf: int):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_compressed.mp4"
+        await editor.compress_video(video_path, output_path, crf=crf)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_extract_audio(job_id: str, video_path: Path, format: str):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_audio.{format}"
+        await editor.extract_audio(video_path, output_path, format=format)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_resize(job_id: str, video_path: Path, width: int, height: int):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_resized{video_path.suffix}"
+        await editor.resize_video(video_path, output_path, width=width, height=height)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_watermark(job_id: str, video_path: Path, text: str, position: str):
+    from services.video_editor import VideoEditor
+    try:
+        editor = VideoEditor()
+        output_path = video_path.parent / f"output_watermark{video_path.suffix}"
+        await editor.add_watermark(video_path, output_path, text=text, position=position)
+    except Exception as e:
+        (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

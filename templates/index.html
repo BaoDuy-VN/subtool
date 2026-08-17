@@ -235,6 +235,56 @@
             color: var(--gray-500);
         }
 
+        /* Editor Grid */
+        .editor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .editor-option {
+            background: #fff;
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .editor-option:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+        .editor-option.selected {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+        .editor-option .icon { font-size: 28px; margin-bottom: 8px; }
+        .editor-option h5 { font-size: 14px; color: var(--gray-900); margin-bottom: 4px; }
+        .editor-option p { font-size: 12px; color: var(--gray-500); }
+
+        .editor-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .editor-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .input-group {
+            margin-bottom: 16px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 6px;
+        }
+
         @media (max-width: 768px) {
             .header h1 { font-size: 28px; }
             .content { padding: 24px; }
@@ -264,6 +314,10 @@
             <div class="tab" data-tab="copyright">
                 <span class="tab-icon">🛡️</span>
                 Kiểm Tra Bản Quyền
+            </div>
+            <div class="tab" data-tab="editor">
+                <span class="tab-icon">✂️</span>
+                Chỉnh Sửa Video
             </div>
         </div>
 
@@ -329,6 +383,85 @@
                 </div>
 
                 <div class="result-section" id="result-copyright"></div>
+            </div>
+
+            <!-- Panel: Chỉnh Sửa Video -->
+            <div class="panel" id="panel-editor">
+                <div class="upload-area" id="dropzone-editor">
+                    <div class="icon">🎬</div>
+                    <h3>Kéo thả video vào đây</h3>
+                    <p>Hoặc click để chọn file • MP4, MKV, AVI, WebM • Tối đa 500MB</p>
+                    <input type="file" id="file-editor" accept="video/*">
+                </div>
+
+                <div class="file-info" id="file-info-editor" style="display:none">
+                    <span class="file-icon">🎥</span>
+                    <div>
+                        <div class="file-name" id="filename-editor"></div>
+                        <div class="file-size" id="filesize-editor"></div>
+                    </div>
+                </div>
+
+                <!-- Editor Options -->
+                <div id="editor-options" style="display:none; margin-top:24px;">
+                    <h4 style="margin-bottom:16px; color:var(--gray-900);">Chọn tính năng chỉnh sửa:</h4>
+                    
+                    <div class="editor-grid">
+                        <div class="editor-option" data-action="trim">
+                            <span class="icon">✂️</span>
+                            <h5>Cắt Video</h5>
+                            <p>Chọn thời gian bắt đầu/kết thúc</p>
+                        </div>
+                        <div class="editor-option" data-action="speed">
+                            <span class="icon">⚡</span>
+                            <h5>Tốc Độ</h5>
+                            <p>Tăng/giảm tốc độ video</p>
+                        </div>
+                        <div class="editor-option" data-action="compress">
+                            <span class="icon">📦</span>
+                            <h5>Nén Video</h5>
+                            <p>Giảm dung lượng file</p>
+                        </div>
+                        <div class="editor-option" data-action="audio">
+                            <span class="icon">🎵</span>
+                            <h5>Tách Audio</h5>
+                            <p>Lấy nhạc/audio từ video</p>
+                        </div>
+                        <div class="editor-option" data-action="watermark">
+                            <span class="icon">💧</span>
+                            <h5>Watermark</h5>
+                            <p>Thêm text vào video</p>
+                        </div>
+                        <div class="editor-option" data-action="resize">
+                            <span class="icon">📐</span>
+                            <h5>Resize</h5>
+                            <p>Thay đổi kích thước</p>
+                        </div>
+                    </div>
+
+                    <!-- Action Settings -->
+                    <div id="action-settings" style="margin-top:20px; padding:20px; background:var(--gray-50); border-radius:12px;">
+                        <!-- Dynamic settings will be inserted here -->
+                    </div>
+
+                    <button id="btn-process" class="btn-download" style="margin-top:20px;">
+                        🚀 Bắt đầu xử lý
+                    </button>
+                </div>
+
+                <div class="progress-section" id="progress-editor">
+                    <div class="progress-status">
+                        <div class="spinner"></div>
+                        <span id="status-editor">Đang xử lý...</span>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressbar-editor"></div>
+                    </div>
+                    <p class="progress-text" id="progresstext-editor">Đang xử lý video...</p>
+                    <a href="#" class="btn-download" id="download-editor" download style="display:none; margin-top:20px;">
+                        📥 Tải video đã xử lý
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -582,6 +715,240 @@
 
             resultSection.innerHTML = html;
             resultSection.classList.add('active');
+        }
+
+        // ===== VIDEO EDITOR =====
+        let editorFile = null;
+        let selectedAction = null;
+
+        // Editor file upload
+        const editorDropzone = document.getElementById('dropzone-editor');
+        const editorInput = document.getElementById('file-editor');
+        
+        if (editorInput) {
+            editorInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    editorFile = e.target.files[0];
+                    showEditorFileInfo(editorFile);
+                }
+            });
+        }
+
+        if (editorDropzone) {
+            editorDropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                editorDropzone.classList.add('dragover');
+            });
+            editorDropzone.addEventListener('dragleave', () => {
+                editorDropzone.classList.remove('dragover');
+            });
+            editorDropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                editorDropzone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    editorFile = e.dataTransfer.files[0];
+                    showEditorFileInfo(editorFile);
+                }
+            });
+        }
+
+        function showEditorFileInfo(file) {
+            document.getElementById('file-info-editor').style.display = 'flex';
+            document.getElementById('filename-editor').textContent = file.name;
+            document.getElementById('filesize-editor').textContent = formatSize(file.size);
+            document.getElementById('editor-options').style.display = 'block';
+        }
+
+        // Editor option selection
+        document.querySelectorAll('.editor-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.editor-option').forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedAction = this.dataset.action;
+                showActionSettings(selectedAction);
+            });
+        });
+
+        function showActionSettings(action) {
+            const settingsDiv = document.getElementById('action-settings');
+            let html = '';
+
+            switch(action) {
+                case 'trim':
+                    html = `
+                        <div class="input-group">
+                            <label>Thời gian bắt đầu (giây):</label>
+                            <input type="number" id="trim-start" class="editor-input" value="0" min="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label>Thời gian kết thúc (giây, để trống = đến hết):</label>
+                            <input type="number" id="trim-end" class="editor-input" placeholder="Để trống nếu cắt đến hết video" step="0.1">
+                        </div>`;
+                    break;
+                case 'speed':
+                    html = `
+                        <div class="input-group">
+                            <label>Tốc độ (0.5 = chậm 2x, 1 = bình thường, 2 = nhanh 2x):</label>
+                            <input type="number" id="speed-value" class="editor-input" value="1" min="0.25" max="4" step="0.25">
+                        </div>`;
+                    break;
+                case 'compress':
+                    html = `
+                        <div class="input-group">
+                            <label>Mức nén (CRF 18-35, cao hơn = nén nhiều hơn):</label>
+                            <input type="number" id="compress-crf" class="editor-input" value="28" min="18" max="35">
+                        </div>`;
+                    break;
+                case 'audio':
+                    html = `
+                        <div class="input-group">
+                            <label>Định dạng audio:</label>
+                            <select id="audio-format" class="editor-input">
+                                <option value="mp3">MP3</option>
+                                <option value="wav">WAV</option>
+                                <option value="m4a">M4A</option>
+                                <option value="aac">AAC</option>
+                            </select>
+                        </div>`;
+                    break;
+                case 'watermark':
+                    html = `
+                        <div class="input-group">
+                            <label>Text watermark:</label>
+                            <input type="text" id="watermark-text" class="editor-input" value="SubTool" placeholder="Nhập text...">
+                        </div>
+                        <div class="input-group">
+                            <label>Vị trí:</label>
+                            <select id="watermark-position" class="editor-input">
+                                <option value="bottom_right">Góc dưới phải</option>
+                                <option value="bottom_left">Góc dưới trái</option>
+                                <option value="top_right">Góc trên phải</option>
+                                <option value="top_left">Góc trên trái</option>
+                                <option value="center">Giữa</option>
+                            </select>
+                        </div>`;
+                    break;
+                case 'resize':
+                    html = `
+                        <div class="input-group">
+                            <label>Chiều rộng (pixel, để trống = tự động):</label>
+                            <input type="number" id="resize-width" class="editor-input" placeholder="VD: 1920">
+                        </div>
+                        <div class="input-group">
+                            <label>Chiều cao (pixel, để trống = tự động):</label>
+                            <input type="number" id="resize-height" class="editor-input" placeholder="VD: 1080">
+                        </div>`;
+                    break;
+            }
+
+            settingsDiv.innerHTML = html;
+        }
+
+        // Process button
+        document.getElementById('btn-process')?.addEventListener('click', async function() {
+            if (!editorFile || !selectedAction) {
+                alert('Vui lòng chọn file và tính năng chỉnh sửa!');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', editorFile);
+
+            let endpoint = '';
+            switch(selectedAction) {
+                case 'trim':
+                    endpoint = '/api/edit/trim';
+                    const startTime = parseFloat(document.getElementById('trim-start')?.value || 0);
+                    const endTime = document.getElementById('trim-end')?.value;
+                    formData.append('start_time', startTime);
+                    if (endTime) formData.append('end_time', endTime);
+                    break;
+                case 'speed':
+                    endpoint = '/api/edit/speed';
+                    formData.append('speed', parseFloat(document.getElementById('speed-value')?.value || 1));
+                    break;
+                case 'compress':
+                    endpoint = '/api/edit/compress';
+                    formData.append('crf', parseInt(document.getElementById('compress-crf')?.value || 28));
+                    break;
+                case 'audio':
+                    endpoint = '/api/edit/extract-audio';
+                    formData.append('format', document.getElementById('audio-format')?.value || 'mp3');
+                    break;
+                case 'watermark':
+                    endpoint = '/api/edit/watermark';
+                    formData.append('text', document.getElementById('watermark-text')?.value || 'SubTool');
+                    formData.append('position', document.getElementById('watermark-position')?.value || 'bottom_right');
+                    break;
+                case 'resize':
+                    endpoint = '/api/edit/resize';
+                    const width = document.getElementById('resize-width')?.value;
+                    const height = document.getElementById('resize-height')?.value;
+                    if (width) formData.append('width', width);
+                    if (height) formData.append('height', height);
+                    break;
+            }
+
+            try {
+                document.getElementById('progress-editor').classList.add('active');
+                document.getElementById('status-editor').textContent = 'Đang upload...';
+
+                const response = await fetch(endpoint, { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.job_id) {
+                    pollEditStatus(data.job_id);
+                }
+            } catch (error) {
+                alert('Lỗi: ' + error.message);
+            }
+        });
+
+        function pollEditStatus(jobId) {
+            let pollCount = 0;
+            const maxPolls = 300; // 10 minutes max
+
+            const poll = setInterval(async () => {
+                pollCount++;
+                if (pollCount > maxPolls) {
+                    clearInterval(poll);
+                    document.getElementById('status-editor').textContent = 'Timeout!';
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/edit/${jobId}/status`);
+                    const data = await response.json();
+
+                    const progressBar = document.getElementById('progressbar-editor');
+                    const statusText = document.getElementById('status-editor');
+                    const progressText = document.getElementById('progresstext-editor');
+
+                    // Fake progress
+                    let progress = Math.min(pollCount * 2, 90);
+                    progressBar.style.width = progress + '%';
+
+                    if (data.status === 'completed') {
+                        clearInterval(poll);
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'var(--success)';
+                        statusText.textContent = '✅ Hoàn thành!';
+                        progressText.textContent = 'Video đã được xử lý xong.';
+
+                        const downloadBtn = document.getElementById('download-editor');
+                        downloadBtn.href = `/api/edit/${jobId}/download`;
+                        downloadBtn.style.display = 'inline-flex';
+                    } else if (data.status === 'error') {
+                        clearInterval(poll);
+                        progressBar.style.width = '100%';
+                        progressBar.style.background = 'var(--danger)';
+                        statusText.textContent = '❌ Lỗi!';
+                        progressText.textContent = data.message || 'Có lỗi xảy ra';
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                }
+            }, 2000);
         }
     </script>
 </body>
