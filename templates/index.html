@@ -287,21 +287,14 @@
 
                 <div class="progress-section" id="progress-extract">
                     <div class="progress-status">
-                        <div class="spinner"></div>
+                        <div class="spinner" id="spinner-extract"></div>
                         <span id="status-extract">Đang xử lý video...</span>
                     </div>
                     <div class="progress-bar-wrapper">
                         <div class="progress-bar" id="progressbar-extract"></div>
                     </div>
                     <p class="progress-text" id="progresstext-extract">Đang cắt frames và OCR phụ đề...</p>
-                </div>
-
-                <div class="result-section" id="result-extract">
-                    <div class="result-card success">
-                        <h4>✅ Tách phụ đề thành công!</h4>
-                        <p id="result-text-extract"></p>
-                    </div>
-                    <a href="#" class="btn-download" id="download-extract" download>
+                    <a href="#" class="btn-download" id="download-extract" download style="display:none; margin-top:20px;">
                         📥 Tải file SRT
                     </a>
                 </div>
@@ -544,23 +537,28 @@
 
         function showExtractResult(data, jobId) {
             console.log('Showing extract result:', data, jobId);
-            const resultSection = document.getElementById('result-extract');
             const downloadBtn = document.getElementById('download-extract');
-            const resultText = document.getElementById('result-text-extract');
+            const statusText = document.getElementById('status-extract');
+            const progressText = document.getElementById('progresstext-extract');
+            const spinner = document.getElementById('spinner-extract');
             
-            if (!resultSection || !downloadBtn || !resultText) {
-                console.error('Result elements not found!');
+            if (!downloadBtn) {
+                console.error('Download button not found!');
                 return;
             }
 
-            resultText.textContent = `Đã tìm thấy ${data.subtitles_found} dòng phụ đề. Click nút bên dưới để tải file SRT.`;
+            // Cập nhật trạng thái
+            statusText.textContent = '✅ Tách phụ đề thành công!';
+            progressText.textContent = `Đã tìm thấy ${data.subtitles_found} dòng phụ đề. Click nút bên dưới để tải.`;
+            
+            // Ẩn spinner
+            if (spinner) spinner.style.display = 'none';
+            
+            // Hiển thị nút tải
             downloadBtn.href = `/api/download/${jobId}`;
+            downloadBtn.style.display = 'inline-flex';
             
-            // Force show result section
-            resultSection.style.display = 'block';
-            resultSection.classList.add('active');
-            
-            console.log('Result section shown, download link:', downloadBtn.href);
+            console.log('Download button shown, link:', downloadBtn.href);
         }
 
         function showCopyrightResult(data) {
