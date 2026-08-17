@@ -447,7 +447,7 @@
                 progressBar.style.width = '50%';
                 statusText.textContent = type === 'extract' ? 'Đang xử lý video...' : 'Đang phân tích...';
                 progressText.textContent = type === 'extract'
-                    ? 'Đang cắt frames và OCR phụ đề (có thể mất 2-5 phút)...'
+                    ? 'Đang cắt frames và OCR phụ đề (server miễn phí có thể chậm, vui lòng chờ 3-5 phút)...'
                     : 'Đang tạo fingerprint và kiểm tra bản quyền...';
 
                 // Poll for status
@@ -490,7 +490,7 @@
                 
                 try {
                     const resp = await fetch(statusEndpoint, { 
-                        signal: AbortSignal.timeout(10000) // 10s timeout
+                        signal: AbortSignal.timeout(30000) // 30s timeout cho Render free tier
                     });
                     const data = await resp.json();
 
