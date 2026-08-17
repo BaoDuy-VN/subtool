@@ -1,0 +1,48 @@
+{
+  "name": "SubTool - Tách Phụ Đề & Chỉnh Sửa Video",
+  "short_name": "SubTool",
+  "description": "Tách phụ đề từ video bằng AI, kiểm tra bản quyền, và chỉnh sửa video miễn phí",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F9FAFB",
+  "theme_color": "#6366F1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["video", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Tách phụ đề",
+      "short_name": "Tách Sub",
+      "description": "Tách phụ đề từ video bằng AI",
+      "url": "/?tab=extract",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Kiểm tra bản quyền",
+      "short_name": "Bản Quyền",
+      "description": "Kiểm tra bản quyền video/nhạc",
+      "url": "/?tab=copyright",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Chỉnh sửa video",
+      "short_name": "Edit",
+      "description": "Cắt, nén, tách audio video",
+      "url": "/?tab=editor",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

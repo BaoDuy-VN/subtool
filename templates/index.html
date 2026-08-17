@@ -3,7 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SubTool – Tách Hard Sub & Kiểm Tra Bản Quyền</title>
+    <title>SubTool – Tách Phụ Đề & Chỉnh Sửa Video</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Tách phụ đề từ video bằng AI, kiểm tra bản quyền, và chỉnh sửa video miễn phí">
+    <meta name="theme-color" content="#6366F1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SubTool">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -950,6 +966,38 @@
                 }
             }, 2000);
         }
+        // ===== SERVICE WORKER REGISTRATION =====
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+
+        // ===== PWA INSTALL PROMPT =====
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Show install button if desired
+            const installBtn = document.createElement('button');
+            installBtn.textContent = '📲 Cài đặt App';
+            installBtn.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:12px 20px;background:var(--primary);color:#fff;border:none;border-radius:10px;cursor:pointer;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+            installBtn.addEventListener('click', async () => {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.remove();
+                }
+                deferredPrompt = null;
+            });
+            document.body.appendChild(installBtn);
+        });
     </script>
 </body>
 </html>
