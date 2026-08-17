@@ -233,27 +233,32 @@ class CopyrightChecker:
     async def _check_youtube(self, audio_path: Path, audio_info: Dict) -> List[Dict]:
         """
         Kiểm tra với YouTube Data API
-        Tìm kiếm bài hát tương tự trên YouTube
+        Tìm kiếm video tương tự và kiểm tra copyright
         """
         if not self.youtube_api_key:
             return []
         
-        # Note: YouTube Content ID API chỉ dành cho partners
-        # Ở đây ta dùng Search API để tìm kiếm tương đối
         matches = []
-        
-        # Tạo query từ audio metadata (nếu có)
-        # Hiện tại dùng hash để tìm kiếm
         import aiohttp
         
-        # Tìm kiếm video tương tự trên YouTube
+        # Tạo query từ filename hoặc metadata
+        query = audio_info.get("title", "") or audio_info.get("filename", "")
+        if not query:
+            return []
+        
+        # Loại bỏ phần mở rộng và ký tự đặc biệt
+        query = Path(query).stem
+        query = ' '.join(query.split()[:5])  # Lấy 5 từ đầu
+        
+        # Tìm kiếm video trên YouTube
         search_url = "https://www.googleapis.com/youtube/v3/search"
         params = {
             "part": "snippet",
-            "q": audio_info.get("title", ""),
+            "q": query,
             "type": "video",
-            "maxResults": 5,
-            "key": self.youtube_api_key
+            "maxResults": 10,
+            "key": self.youtube_api_key,
+            "relevanceLanguage": "zh"  # Ưu tiên video Trung Quốc (cho donghua)
         }
         
         try:
@@ -262,17 +267,78 @@ class CopyrightChecker:
                     if resp.status == 200:
                         data = await resp.json()
                         for item in data.get("items", []):
+                            video_id = item["id"].get("videoId", "")
+                            title = item["snippet"]["title"]
+                            channel = item["snippet"]["channelTitle"]
+                            
+                            # Kiểm tra video details để xem có copyright claim không
+                            video_details = await self._check_video_copyright(video_id, session)
+                            
                             matches.append({
                                 "source": "youtube",
-                                "title": item["snippet"]["title"],
-                                "channel": item["snippet"]["channelTitle"],
-                                "video_id": item["id"].get("videoId", ""),
-                                "confidence": 0.5  # Không chắc chắn
+                                "title": title,
+                                "channel": channel,
+                                "video_id": video_id,
+                                "url": f"https://youtube.com/watch?v={video_id}",
+                                "confidence": video_details.get("confidence", 0.3),
+                                "has_claim": video_details.get("has_claim", False),
+                                "description": item["snippet"].get("description", "")[:100]
                             })
+        except Exception as e:
+            print(f"YouTube API error: {e}")
+        
+        return matches
+    
+    async def _check_video_copyright(self, video_id: str, session) -> Dict:
+        """
+        Kiểm tra chi tiết video để phát hiện copyright
+        """
+        if not self.youtube_api_key:
+            return {"confidence": 0.3, "has_claim": False}
+        
+        try:
+            video_url = "https://www.googleapis.com/youtube/v3/videos"
+            params = {
+                "part": "status,contentDetails,statistics",
+                "id": video_id,
+                "key": self.youtube_api_key
+            }
+            
+            async with session.get(video_url, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    items = data.get("items", [])
+                    if items:
+                        video = items[0]
+                        status = video.get("status", {})
+                        
+                        # Kiểm tra các dấu hiệu copyright
+                        has_claim = False
+                        confidence = 0.3
+                        
+                        # Video bị block hoặc hạn chế
+                        if status.get("license") == "youtube":
+                            confidence += 0.2  # Creative Commons = an toàn hơn
+                        
+                        # Video có nhiều views = có thể là nội dung phổ biến
+                        stats = video.get("statistics", {})
+                        view_count = int(stats.get("viewCount", 0))
+                        if view_count > 1000000:
+                            confidence += 0.2  # Video phổ biến
+                        
+                        # Kiểm tra description có chứa từ khóa copyright
+                        snippet = video.get("snippet", {})
+                        description = snippet.get("description", "").lower()
+                        copyright_keywords = ["copyright", "bản quyền", "版权", "all rights reserved"]
+                        if any(kw in description for kw in copyright_keywords):
+                            has_claim = True
+                            confidence += 0.3
+                        
+                        return {"confidence": min(confidence, 1.0), "has_claim": has_claim}
         except Exception:
             pass
         
-        return matches
+        return {"confidence": 0.3, "has_claim": False}
     
     def _compile_result(self, local_matches: List[Dict], youtube_matches: List[Dict], 
                        audio_info: Dict) -> Dict:

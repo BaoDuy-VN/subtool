@@ -489,9 +489,7 @@
                 }
                 
                 try {
-                    const resp = await fetch(statusEndpoint, { 
-                        signal: AbortSignal.timeout(30000) // 30s timeout cho Render free tier
-                    });
+                    const resp = await fetch(statusEndpoint); // Không timeout cho local
                     const data = await resp.json();
 
                     // Tăng progress chậm hơn để không đứng im
@@ -512,11 +510,22 @@
                         progressBar.style.background = 'var(--success)';
                         statusText.textContent = 'Hoàn thành!';
 
+                        // Ẩn progress section sau 1 giây
+                        setTimeout(() => {
+                            document.getElementById(`progress-${type}`).style.display = 'none';
+                        }, 1000);
+
                         if (type === 'extract') {
                             showExtractResult(data, jobId);
                         } else {
                             showCopyrightResult(data);
                         }
+                        
+                        // Scroll đến kết quả
+                        setTimeout(() => {
+                            const resultEl = document.getElementById(`result-${type}`);
+                            if (resultEl) resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 500);
                     } else if (data.status === 'error') {
                         clearInterval(poll);
                         progressBar.style.width = '100%';
@@ -534,14 +543,24 @@
         }
 
         function showExtractResult(data, jobId) {
+            console.log('Showing extract result:', data, jobId);
             const resultSection = document.getElementById('result-extract');
             const downloadBtn = document.getElementById('download-extract');
+            const resultText = document.getElementById('result-text-extract');
+            
+            if (!resultSection || !downloadBtn || !resultText) {
+                console.error('Result elements not found!');
+                return;
+            }
 
-            document.getElementById('result-text-extract').textContent =
-                `Đã tìm thấy ${data.subtitles_found} dòng phụ đề. Click nút bên dưới để tải file SRT.`;
-
+            resultText.textContent = `Đã tìm thấy ${data.subtitles_found} dòng phụ đề. Click nút bên dưới để tải file SRT.`;
             downloadBtn.href = `/api/download/${jobId}`;
+            
+            // Force show result section
+            resultSection.style.display = 'block';
             resultSection.classList.add('active');
+            
+            console.log('Result section shown, download link:', downloadBtn.href);
         }
 
         function showCopyrightResult(data) {

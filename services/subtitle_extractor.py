@@ -128,15 +128,21 @@ class SubtitleExtractor:
             # Crop phần dưới (25% chiều cao frame - nơi có sub)
             cropped = self._crop_subtitle_area(frame_path)
             
-            # OCR bằng Tesseract - chỉ dùng English cho nhanh
+            # OCR bằng Tesseract - tối ưu cho Chinese subtitles
             try:
                 img = Image.open(str(cropped))
-                # Chuyển sang grayscale để tăng độ chính xác
+                # Chuyển sang grayscale
                 img = img.convert('L')
-                # Resize nhỏ hơn để OCR nhanh hơn
-                img = img.resize((img.width // 2, img.height // 2))
-                # OCR chỉ English (nhanh hơn nhiều so với chi_sim+vie)
-                text = pytesseract.image_to_string(img, lang='eng')
+                # Tăng độ tương phản (giúp OCR chính xác hơn)
+                from PIL import ImageEnhance
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(2.0)  # Tăng contrast 2x
+                # Resize xuống còn 70% (giữ đủ chi tiết cho OCR)
+                img = img.resize((int(img.width * 0.7), int(img.height * 0.7)))
+                # OCR với Chinese (SIM + traditional) + English
+                # PSM 6: Assume a single uniform block of text
+                custom_config = r'--oem 3 --psm 6'
+                text = pytesseract.image_to_string(img, lang='chi_sim+chi_tra+eng', config=custom_config)
             except Exception as e:
                 text = ""
             
