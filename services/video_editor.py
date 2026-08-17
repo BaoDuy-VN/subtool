@@ -100,9 +100,13 @@ class VideoEditor:
         else:
             force_style += ",Alignment=2"  # Bottom center
         
+        # Escape đường dẫn cho filter subtitles (tránh lỗi parse của ffmpeg)
+        srt_escaped = str(srt_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        
         cmd = [
             "ffmpeg", "-i", str(video_path),
-            "-vf", f"subtitles={srt_path}:force_style='{force_style}'",
+            "-vf", f"subtitles='{srt_escaped}':force_style='{force_style}'",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",  # Encode nhanh, chất lượng tốt
             "-c:a", "copy",
             "-y", str(output_path)
         ]
@@ -110,7 +114,9 @@ class VideoEditor:
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        await proc.communicate()
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"FFmpeg burn subtitle failed: {stderr.decode()[-800:]}")
         return output_path
     
     async def trim_video(self, video_path: Path, output_path: Path,

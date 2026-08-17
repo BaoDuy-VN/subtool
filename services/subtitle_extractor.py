@@ -73,6 +73,10 @@ class SubtitleExtractor:
         if srt_path.exists() and srt_path != final_srt_path:
             srt_path.rename(final_srt_path)
         
+        # Step 5: Tách các đoạn sub quá dài thành nhiều dòng ngắn, timing chia đều
+        if final_srt_path.exists():
+            self._split_long_entries(final_srt_path)
+        
         # Cleanup audio file
         if audio_path.exists():
             audio_path.unlink()
@@ -126,6 +130,8 @@ class SubtitleExtractor:
             "-osrt",  # Output SRT format
             "-of", output_prefix,  # Output file prefix
             "-l", "auto",  # Auto detect language
+            "--max-len", "42",  # Tối đa 42 ký tự mỗi dòng sub -> đoạn ngắn, khớp lời thoại
+            "--split-on-word", "true",  # Tách theo ranh giới từ, timing chính xác hơn
             "--no-prints"  # Suppress verbose output
         ]
         
@@ -150,3 +156,83 @@ class SubtitleExtractor:
         secs = int(seconds % 60)
         millis = int((seconds % 1) * 1000)
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    
+    def _parse_time(self, time_str: str) -> float:
+        """Convert SRT time HH:MM:SS,mmm sang giây"""
+        h, m, rest = time_str.strip().split(":")
+        s, ms = rest.split(",")
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+    
+    def _split_text(self, text: str, max_chars: int = 42) -> List[str]:
+        """
+        Tách text dài thành các đoạn <= max_chars ký tự
+        Ưu tiên tách ở dấu câu (，。！？、； ,.!?;) để sub tự nhiên
+        """
+        text = text.strip()
+        if len(text) <= max_chars:
+            return [text]
+        
+        chunks = []
+        remaining = text
+        punctuation = "，。！？、；：,.!?;"
+        
+        while len(remaining) > max_chars:
+            # Tìm dấu câu gần max_chars nhất (trong khoảng 40%..100%)
+            best = -1
+            for i in range(int(max_chars * 0.4), min(max_chars, len(remaining))):
+                if remaining[i] in punctuation:
+                    best = i
+            
+            if best == -1:
+                # Không có dấu câu -> cắt cứng tại max_chars
+                best = max_chars - 1
+            
+            chunks.append(remaining[:best + 1].strip())
+            remaining = remaining[best + 1:].strip()
+        
+        if remaining:
+            chunks.append(remaining)
+        return chunks
+    
+    def _split_long_entries(self, srt_path: Path, max_chars: int = 42):
+        """
+        Hậu xử lý SRT: tách các entry dài hơn max_chars thành nhiều dòng,
+        thời gian chia theo tỷ lệ số ký tự -> sub hiển thị khớp từng đoạn
+        """
+        content = srt_path.read_text(encoding="utf-8")
+        blocks = content.strip().split("\n\n")
+        new_blocks = []
+        index = 1
+        
+        for block in blocks:
+            lines = block.strip().split("\n")
+            if len(lines) < 3:
+                continue
+            try:
+                times = lines[1].split(" --> ")
+                start = self._parse_time(times[0])
+                end = self._parse_time(times[1])
+                text = " ".join(lines[2:])
+            except (ValueError, IndexError):
+                continue
+            
+            chunks = self._split_text(text, max_chars)
+            if len(chunks) <= 1:
+                new_blocks.append(f"{index}\n{lines[1]}\n{text}")
+                index += 1
+                continue
+            
+            # Chia thời gian theo tỷ lệ số ký tự của từng chunk
+            total_chars = sum(len(c) for c in chunks)
+            duration = max(end - start, 0.001)
+            cursor = start
+            for chunk in chunks:
+                chunk_dur = duration * (len(chunk) / total_chars)
+                chunk_end = cursor + chunk_dur
+                new_blocks.append(
+                    f"{index}\n{self._format_time(cursor)} --> {self._format_time(chunk_end)}\n{chunk}"
+                )
+                cursor = chunk_end
+                index += 1
+        
+        srt_path.write_text("\n\n".join(new_blocks) + "\n", encoding="utf-8")

@@ -200,6 +200,89 @@ async def process_copyright_check(job_id: str, file_path: Path):
 
 # ===== VIDEO EDITOR API =====
 
+@app.post("/api/translate-burn")
+async def translate_and_burn(
+    file: UploadFile = File(...),
+    srt_file: UploadFile = File(None),
+    font_size: int = 24,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Dịch phụ đề Trung → Việt và burn vào video
+    1. Nếu có srt_file: dịch và burn trực tiếp
+    2. Nếu không có srt_file: tách sub bằng Whisper → dịch → burn
+    """
+    job_id = str(uuid.uuid4())[:8]
+    job_dir = UPLOAD_DIR / f"translate-{job_id}"
+    job_dir.mkdir(exist_ok=True)
+    
+    # Save video
+    video_path = job_dir / file.filename
+    with open(video_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    
+    # Save SRT if provided
+    srt_path = None
+    if srt_file and srt_file.filename:
+        srt_path = job_dir / srt_file.filename
+        with open(srt_path, "wb") as f:
+            shutil.copyfileobj(srt_file.file, f)
+    
+    if background_tasks:
+        background_tasks.add_task(process_translate_burn, job_id, video_path, srt_path, font_size)
+    
+    return {"job_id": job_id, "status": "processing", "message": "Đang xử lý..."}
+
+
+@app.get("/api/translate-burn/{job_id}/status")
+async def check_translate_status(job_id: str):
+    """Kiểm tra trạng thái dịch + burn sub"""
+    job_dir = UPLOAD_DIR / f"translate-{job_id}"
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job không tồn tại")
+    
+    # Check output video - chỉ completed khi có done.txt (ffmpeg đã xong hẳn)
+    output_videos = list(job_dir.glob("output_*.mp4"))
+    if output_videos and (job_dir / "done.txt").exists():
+        return {
+            "status": "completed",
+            "job_id": job_id,
+            "output_file": f"/static/uploads/translate-{job_id}/{output_videos[0].name}",
+            "filename": output_videos[0].name
+        }
+    
+    error_file = job_dir / "error.txt"
+    if error_file.exists():
+        return {"status": "error", "message": error_file.read_text()}
+    
+    # Check progress file
+    progress_file = job_dir / "progress.txt"
+    if progress_file.exists():
+        return {"status": "processing", "job_id": job_id, "progress": progress_file.read_text()}
+    
+    return {"status": "processing", "job_id": job_id}
+
+
+@app.get("/api/translate-burn/{job_id}/download")
+async def download_translated(job_id: str):
+    """Tải video đã dịch + burn sub"""
+    job_dir = UPLOAD_DIR / f"translate-{job_id}"
+    output_videos = list(job_dir.glob("output_*.mp4"))
+    if not output_videos or not (job_dir / "done.txt").exists():
+        raise HTTPException(status_code=404, detail="Chưa có video output")
+    return FileResponse(output_videos[0], filename=output_videos[0].name)
+
+
+@app.get("/api/translate-burn/{job_id}/srt")
+async def download_translated_srt(job_id: str):
+    """Tải file SRT đã dịch"""
+    job_dir = UPLOAD_DIR / f"translate-{job_id}"
+    srt_files = list(job_dir.glob("*_vi.srt"))
+    if not srt_files:
+        raise HTTPException(status_code=404, detail="Chưa có SRT đã dịch")
+    return FileResponse(srt_files[0], filename=srt_files[0].name, media_type="text/plain")
+
+
 @app.post("/api/edit/trim")
 async def trim_video(
     file: UploadFile = File(...),
@@ -423,6 +506,50 @@ async def process_watermark(job_id: str, video_path: Path, text: str, position: 
         await editor.add_watermark(video_path, output_path, text=text, position=position)
     except Exception as e:
         (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
+
+
+async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, font_size: int):
+    """Xử lý dịch phụ đề và burn vào video"""
+    from services.translation_service import TranslationService
+    from services.video_editor import VideoEditor
+    
+    job_dir = UPLOAD_DIR / f"translate-{job_id}"
+    progress_file = job_dir / "progress.txt"
+    
+    try:
+        translator = TranslationService()
+        editor = VideoEditor()
+        
+        # Step 1: Nếu không có SRT, tách sub bằng Whisper
+        if not srt_path or not srt_path.exists():
+            progress_file.write_text("Đang tách phụ đề bằng Whisper AI...")
+            from services.subtitle_extractor import SubtitleExtractor
+            extractor = SubtitleExtractor()
+            srt_path = await extractor.extract(video_path, job_id)
+        
+        # Step 2: Dịch SRT
+        progress_file.write_text("Đang dịch phụ đề Trung → Việt...")
+        translated_srt = await translator.translate_srt(srt_path)
+        
+        # Step 3: Burn sub vào video
+        progress_file.write_text("Đang gắn phụ đề vào video...")
+        output_path = job_dir / f"output_translated.mp4"
+        await editor.burn_subtitle(
+            video_path=video_path,
+            srt_path=translated_srt,
+            output_path=output_path,
+            font_size=font_size,
+            position="bottom"
+        )
+        
+        # Done - đánh dấu hoàn thành để status endpoint báo completed
+        (job_dir / "done.txt").write_text("ok")
+        if progress_file.exists():
+            progress_file.unlink()
+            
+    except Exception as e:
+        (job_dir / "error.txt").write_text(str(e))
+        raise
 
 
 if __name__ == "__main__":
