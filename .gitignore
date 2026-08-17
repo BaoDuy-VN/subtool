@@ -1,3 +1,4 @@
 __pycache__/
 models/*.bin
 static/uploads/
+.venv-demucs/

@@ -206,6 +206,8 @@ async def translate_and_burn(
     srt_file: UploadFile = File(None),
     font_size: int = 48,
     remove_hardsub: bool = True,
+    dub: bool = False,
+    voice: str = "vi-VN-HoaiMyNeural",
     background_tasks: BackgroundTasks = None
 ):
     """
@@ -230,7 +232,7 @@ async def translate_and_burn(
             shutil.copyfileobj(srt_file.file, f)
     
     if background_tasks:
-        background_tasks.add_task(process_translate_burn, job_id, video_path, srt_path, font_size, remove_hardsub)
+        background_tasks.add_task(process_translate_burn, job_id, video_path, srt_path, font_size, remove_hardsub, dub, voice)
     
     return {"job_id": job_id, "status": "processing", "message": "Đang xử lý..."}
 
@@ -509,7 +511,7 @@ async def process_watermark(job_id: str, video_path: Path, text: str, position: 
         (UPLOAD_DIR / f"edit-{job_id}" / "error.txt").write_text(str(e))
 
 
-async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, font_size: int, remove_hardsub: bool = True):
+async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, font_size: int, remove_hardsub: bool = True, dub: bool = False, voice: str = "vi-VN-HoaiMyNeural"):
     """Xử lý dịch phụ đề và burn vào video"""
     from services.translation_service import TranslationService
     from services.video_editor import VideoEditor
@@ -544,11 +546,51 @@ async def process_translate_burn(job_id: str, video_path: Path, srt_path: Path, 
             remove_hardsub=remove_hardsub
         )
         
+        # Step 4 (tùy chọn): Lồng tiếng Việt - xóa giọng Trung, giữ nhạc/SFX
+        if dub:
+            from services.dub_service import DubService
+            dub_service = DubService(voice=voice)
+            
+            def progress(msg: str):
+                progress_file.write_text(msg)
+            
+            # 4a. Trích audio gốc
+            progress("Đang trích xuất âm thanh gốc...")
+            audio_path = job_dir / "audio_full.wav"
+            cmd = ["ffmpeg", "-i", str(video_path), "-vn",
+                   "-ar", "44100", "-ac", "2", "-acodec", "pcm_s16le",
+                   "-y", str(audio_path)]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            await proc.communicate()
+            
+            # 4b. Tách giọng nói khỏi nhạc/SFX
+            bed_path = await dub_service.separate_bed(audio_path, job_dir, progress)
+            
+            # 4c. Đọc phụ đề dịch bằng giọng Việt
+            lines = dub_service.parse_srt_times(translated_srt)
+            clips = await dub_service.synthesize_lines(lines, job_dir, progress)
+            
+            # 4d. Ghép các câu đọc thành track dub theo đúng timing
+            progress("Đang ghép giọng lồng tiếng vào đúng mốc thời gian...")
+            duration = await editor.get_video_info(video_path)
+            duration = duration.get("duration") or 9999
+            dub_track = dub_service.compose_dub_track(clips, duration, job_dir)
+            
+            # 4e. Thay âm thanh video
+            progress("Đang ghép âm thanh cuối cùng...")
+            dubbed_path = job_dir / "output_dubbed.mp4"
+            await editor.mix_audio(output_path, bed_path, dub_track, dubbed_path)
+            
+            # Bản lồng tiếng là bản cuối cùng
+            output_path.unlink(missing_ok=True)
+            dubbed_path.rename(output_path)
+        
         # Done - đánh dấu hoàn thành để status endpoint báo completed
         (job_dir / "done.txt").write_text("ok")
         if progress_file.exists():
             progress_file.unlink()
-            
     except Exception as e:
         (job_dir / "error.txt").write_text(str(e))
         raise

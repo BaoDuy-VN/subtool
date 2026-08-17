@@ -105,18 +105,19 @@ class VideoEditor:
         elif position == "middle":
             force_style += ",Alignment=5"  # Middle center
         else:
-            force_style += ",Alignment=2,MarginV=20"  # Bottom center
+            # Bottom center - MarginV ~3.5% chiều cao để sub nằm gọn trong vùng mờ
+            force_style += ",Alignment=2,MarginV=10"
         
         # Escape đường dẫn cho filter subtitles (tránh lỗi parse của ffmpeg)
         srt_escaped = str(srt_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
         
         if remove_hardsub:
-            # Làm mờ 20% dưới cùng của khung hình (nơi sub cứng gốc nằm)
-            # rồi mới gắn sub mới lên trên -> che được sub gốc
+            # Làm mờ dải 13% ở đáy (0.85→0.98) - vừa khung sub cứng gốc,
+            # rồi gắn sub mới đè lên đúng chỗ đó
             filter_complex = (
                 "[0:v]split=2[base][subsrc];"
-                "[subsrc]crop=iw:ih*0.20:0:ih*0.80,boxblur=20:2[blurred];"
-                "[base][blurred]overlay=0:H*0.80[bg];"
+                "[subsrc]crop=iw:ih*0.13:0:ih*0.85,boxblur=20:2[blurred];"
+                "[base][blurred]overlay=0:H*0.85[bg];"
                 f"[bg]subtitles='{srt_escaped}':force_style='{force_style}'[out]"
             )
             cmd = [
@@ -142,6 +143,30 @@ class VideoEditor:
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
             raise RuntimeError(f"FFmpeg burn subtitle failed: {stderr.decode()[-800:]}")
+        return output_path
+    
+    async def mix_audio(self, video_path: Path, bed_path: Path, dub_path: Path,
+                        output_path: Path) -> Path:
+        """
+        Thay âm thanh video bằng: nhạc/SFX gốc (bed) + giọng lồng tiếng Việt (dub).
+        Video stream giữ nguyên (copy) nên nhanh.
+        """
+        cmd = [
+            "ffmpeg", "-i", str(video_path),
+            "-i", str(bed_path),
+            "-i", str(dub_path),
+            "-filter_complex", "[1:a][2:a]amix=inputs=2:duration=first:normalize=0,volume=1.5[a]",
+            "-map", "0:v", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-shortest",
+            "-y", str(output_path)
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"FFmpeg mix audio failed: {stderr.decode()[-500:]}")
         return output_path
     
     async def trim_video(self, video_path: Path, output_path: Path,

@@ -518,6 +518,17 @@
                         <input type="checkbox" id="remove-hardsub" checked style="width:18px; height:18px;">
                         <label for="remove-hardsub" style="margin:0;">🌫️ Làm mờ phụ đề gốc trong video (che sub cứng Trung)</label>
                     </div>
+                    <div class="input-group" style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="dub-enable" style="width:18px; height:18px;">
+                        <label for="dub-enable" style="margin:0;">🎙️ Lồng tiếng Việt (xóa giọng Trung, giữ nhạc & SFX)</label>
+                    </div>
+                    <div class="input-group" style="margin-top:10px;">
+                        <label>Giọng đọc:</label>
+                        <select id="dub-voice" class="editor-input">
+                            <option value="vi-VN-HoaiMyNeural">Nữ (Hoài My)</option>
+                            <option value="vi-VN-NamMinhNeural">Nam (Nam Minh)</option>
+                        </select>
+                    </div>
                     <button id="btn-translate" class="btn-download" style="margin-top:12px;">
                         🌐 Dịch + Gắn Sub vào Video
                     </button>
@@ -1128,7 +1139,9 @@
 
             const params = new URLSearchParams({
                 font_size: document.getElementById('font-size')?.value || 48,
-                remove_hardsub: document.getElementById('remove-hardsub')?.checked ? 'true' : 'false'
+                remove_hardsub: document.getElementById('remove-hardsub')?.checked ? 'true' : 'false',
+                dub: document.getElementById('dub-enable')?.checked ? 'true' : 'false',
+                voice: document.getElementById('dub-voice')?.value || 'vi-VN-HoaiMyNeural'
             });
 
             try {
