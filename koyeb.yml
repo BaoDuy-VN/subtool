@@ -1,0 +1,18 @@
+# Koyeb deployment info
+name: subtool
+service:
+  type: web
+  ports:
+    - port: 8000
+      protocol: http
+  routes:
+    - path: /
+  env:
+    - key: PORT
+      value: "8000"
+  instance_types:
+    - type: nano
+      size: nano
+  builds:
+    - type: docker
+      dockerfile: Dockerfile
